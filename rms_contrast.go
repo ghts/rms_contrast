@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	_ "image/jpeg" // 'image/jpeg'는 명시적으로 사용되지는 않지만 초기화를 위해서 import 되었음.
+	_ "image/jpeg" // 명시적으로 사용되지는 않지만 초기화를 위해서 import 되었음.
+	_ "golang.org/x/image/tiff" // 명시적으로 사용되지는 않지만 초기화를 위해서 import 되었음.
 	"math"
 	"math/big"
 	"os"
@@ -17,19 +18,19 @@ import (
 )
 
 func main() {
-	JPEG파일_경로_모음 := F_JPEG파일_목록()
+	이미지_파일_경로_모음 := F이미지_파일_목록()
 	결과 := make([][]string, 0)
 
-	for _, JPEG파일_경로 := range JPEG파일_경로_모음 {
-		컨트라스트_값 := F_RMS_컨트라스트(JPEG파일_경로)
+	for _, 이미지_파일_경로 := range 이미지_파일_경로_모음 {
+		컨트라스트_값 := F_RMS_컨트라스트(이미지_파일_경로)
 
 		행 := make([]string, 2)
 		행[0] = strconv.FormatFloat(컨트라스트_값, 'f', -1, 64)
-		행[1] = JPEG파일_경로
+		행[1] = 이미지_파일_경로
 
 		결과 = append(결과, 행)
 
-		fmt.Printf("%v : %v\n", JPEG파일_경로, 컨트라스트_값)
+		fmt.Printf("%v : %v\n", 이미지_파일_경로, 컨트라스트_값)
 	}
 
 	csv파일명 := "대비값_" + time.Now().Format("060102-150405") + ".csv"
@@ -104,10 +105,10 @@ func F_RMS_컨트라스트(파일명 string) float64 {
 	return RMS_컨트라스트
 }
 
-func F_JPEG파일_목록() []string {
+func F이미지_파일_목록() []string {
 	드라이브_모음 := []string{"D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R",
 		"S", "T", "U", "V", "W", "X", "Y", "Z"}
-	JPEG파일_목록 := make([]string, 0)
+	이미지_파일_목록 := make([]string, 0)
 
 	for _, 드라이브명 := range 드라이브_모음 {
 		디렉토리명 := 드라이브명 + ":/DCIM/"
@@ -127,25 +128,27 @@ func F_JPEG파일_목록() []string {
 			case 파일정보.IsDir():
 				return nil
 			case strings.HasSuffix(strings.ToLower(파일경로), ".jpg"):
-				JPEG파일_목록 = append(JPEG파일_목록, 파일경로)
+				이미지_파일_목록 = append(이미지_파일_목록, 파일경로)
+			case strings.HasSuffix(strings.ToLower(파일경로), ".tif"):
+				이미지_파일_목록 = append(이미지_파일_목록, 파일경로)
 			}
 
 			return nil
 		})
 	}
 
-	sort.Strings(JPEG파일_목록)
+	sort.Strings(이미지_파일_목록)
 
-	return JPEG파일_목록
+	return 이미지_파일_목록
 }
 
 func F존재함(경로 string) (bool, error) {
 	_, 에러 := os.Stat(경로)
-	if 에러 == nil {
-		return true, nil
-	}
 
-	if os.IsNotExist(에러) {
+	switch {
+	case 에러 == nil:
+		return true, nil
+	case os.IsNotExist(에러):
 		return false, nil
 	}
 

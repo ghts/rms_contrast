@@ -15,38 +15,75 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"runtime"
 )
 
 func main() {
 	이미지_파일_경로_모음 := F이미지_파일_목록()
-	결과 := make([][]string, 0)
+	fmt.Printf("%v개 파일을 찾았습니다.\n", len(이미지_파일_경로_모음))
 
+	결과_맵 := make(map[string]([]string))
+	ch초기화 := make(chan bool)
+	in := make(chan string, len(이미지_파일_경로_모음))
+	out := make(chan []string)
+	ch종료 := make(chan bool)
+
+	// 병렬처리를 위해서 CPU코어 수량만큼 컨트라스트 계산 루틴 실행.
+	for i:=0 ; i<runtime.NumCPU() ; i++ {
+		go F컨트라스트(ch초기화, in, out, ch종료)
+		<-ch초기화
+	}
+
+	// 컨트라스트 계산 루틴에 입력값 제공.
 	for _, 이미지_파일_경로 := range 이미지_파일_경로_모음 {
-		컨트라스트_값 := F_RMS_컨트라스트(이미지_파일_경로)
+		in <- 이미지_파일_경로
+	}
 
-		행 := make([]string, 2)
-		행[0] = strconv.FormatFloat(컨트라스트_값, 'f', -1, 64)
-		행[1] = 이미지_파일_경로
+	// 컨트라스트 계산 루틴으로부터 결과값 받음.
+	// 병렬처리에서는 순서가 뒤바뀔 수 있으므로, 순서에 무관한 맵에 임시 보관.
+	for _, _ = range 이미지_파일_경로_모음 {
+		결과 := <-out
+		결과_맵[결과[0]] = 결과
+		fmt.Printf("%v : %v\n", 결과[0], 결과[1])
+	}
 
-		결과 = append(결과, 행)
-
-		fmt.Printf("%v : %v\n", 이미지_파일_경로, 컨트라스트_값)
+	// 맵에 저장된 결과를 파일 경로명에 따라서 정렬.
+	결과_모음 := make([]([]string), len(이미지_파일_경로_모음))
+	for i, 이미지_파일_경로 := range 이미지_파일_경로_모음 {
+		결과_모음[i] = 결과_맵[이미지_파일_경로]
 	}
 
 	csv파일명 := "대비값_" + time.Now().Format("060102-150405") + ".csv"
-	if 에러 := F_CSV쓰기(결과, csv파일명); 에러 != nil {
+	if 에러 := F_CSV쓰기(결과_모음, csv파일명); 에러 != nil {
 		fmt.Println(에러.Error())
 	}
 
-	fmt.Printf("기록 완료 : %v\n", csv파일명)
+	fmt.Printf("기록 완료 : %v\n\n", csv파일명)
+
+	close(ch종료)
+	fmt.Printf("연산을 마쳤습니다.\n Ctrl-C를 눌러서 프로그램을 종료하거나, 프로그램 창을 닫아주세요.\n")
+
+	time.Sleep(24*time.Hour)
 }
 
-// RMS(Root Mean Square) 컨트라스트 계산
-func F_RMS_컨트라스트(파일명 string) float64 {
+func F컨트라스트(ch초기화 chan bool, in chan string, out chan []string, ch종료 chan bool) {
+	ch초기화 <- true
+
+	for {
+		select {
+		case <-ch종료:
+			return
+		case 이미지_파일_경로 := <-in:
+			out <- f컨트라스트_도우미(이미지_파일_경로)
+		}
+	}
+}
+
+func f컨트라스트_도우미(이미지_파일_경로 string) []string {
 	const 정수64_최대값 int64 = 9223372036854775807
 	const 무부호정수16_최대값 int64 = 65535
 
-	파일, 에러 := os.Open(파일명)
+	파일, 에러 := os.Open(이미지_파일_경로)
 	F에러_패닉(에러)
 
 	원본_이미지, _, 에러 := image.Decode(파일)
@@ -102,7 +139,11 @@ func F_RMS_컨트라스트(파일명 string) float64 {
 	컨트라스트_제곱 := 제곱근_내_합계 / float64(픽셀_수량)
 	RMS_컨트라스트 := math.Sqrt(컨트라스트_제곱)
 
-	return RMS_컨트라스트
+	결과 := make([]string, 2)
+	결과[0] = 이미지_파일_경로
+	결과[1] = strconv.FormatInt(int64(RMS_컨트라스트 + 0.5), 10)   // 양수 반올림.
+
+	return 결과
 }
 
 func F이미지_파일_목록() []string {

@@ -53,6 +53,7 @@ func main() {
 		결과_모음[i] = 결과_맵[이미지_파일_경로]
 	}
 
+	// 계산 결과를 CSV파일에 저장
 	csv파일명 := "대비값_" + time.Now().Format("060102-150405") + ".csv"
 	if 에러 := F_CSV쓰기(결과_모음, csv파일명); 에러 != nil {
 		fmt.Println(에러.Error())
@@ -89,8 +90,18 @@ func f컨트라스트_도우미(이미지_파일_경로 string) []string {
 	원본_이미지, _, 에러 := image.Decode(파일)
 	F에러_패닉(에러)
 
-	경계 := 원본_이미지.Bounds()
-	가로폭, 세로길이 := 경계.Max.X, 경계.Max.Y
+	// 중앙 1/10 영역만 연산 대상으로 지정함.
+	전체_경계 := 원본_이미지.Bounds()
+	X폭 := int(전체_경계.Dx() / 10)
+	Y폭 := int(전체_경계.Dy() / 10)
+
+	X시작점 := 전체_경계.Min.X + (X폭/2) - (X폭/20)
+	X종료점 := X시작점 + X폭
+
+	Y시작점 := 전체_경계.Min.Y + (Y폭/2) - (Y폭/20)
+	Y종료점 := Y시작점 + Y폭
+
+	경계 := image.Rect(X시작점, Y시작점, X종료점, Y종료점)    // 연산할 대상.
 	흑백_이미지 := image.NewGray16(경계)
 	var 원본_색상 color.Color
 	var 흑백_색상값 uint16
@@ -102,8 +113,8 @@ func f컨트라스트_도우미(이미지_파일_경로 string) []string {
 	// 흑백 변환 및 평균값 계산.
 	// 이미지의 경계는 (0, 0)이 아닐 수도 있으므로, 반복문은 '경계.Min.Y', '경계.Min.X'에서 시작한다.
 	// X보다는 Y에 대해서 먼저 반복하는 것이 (Y보다 X에 대해서 반복하는 것보다) 메모리 사용 효율이 좋은 경향이 있다.
-	for y := 경계.Min.Y; y < 세로길이; y++ {
-		for x := 경계.Min.X; x < 가로폭; x++ {
+	for y := 경계.Min.Y; y < 경계.Max.Y; y++ {
+		for x := 경계.Min.X; x < 경계.Max.X; x++ {
 			// 흑백으로 변환
 			원본_색상 = 원본_이미지.At(x, y)
 			흑백_이미지.Set(x, y, 원본_색상)
@@ -118,7 +129,7 @@ func f컨트라스트_도우미(이미지_파일_경로 string) []string {
 	}
 
 	최종_합계.Add(최종_합계, big.NewInt(중간_합계))
-	픽셀_수량 := int64(가로폭-경계.Min.X) * int64(세로길이-경계.Min.Y)
+	픽셀_수량 := int64(경계.Dx()) * int64(경계.Dy())
 
 	최종_합계_Rat := new(big.Rat).SetInt(최종_합계)
 	픽셀_수량_Rat := new(big.Rat).SetInt64(픽셀_수량)
@@ -127,8 +138,8 @@ func f컨트라스트_도우미(이미지_파일_경로 string) []string {
 	// RMS 컨트라스트 계산.
 	var 제곱근_내_합계 float64
 
-	for y := 경계.Min.Y; y < 세로길이; y++ {
-		for x := 경계.Min.X; x < 가로폭; x++ {
+	for y := 경계.Min.Y; y < 경계.Max.Y; y++ {
+		for x := 경계.Min.X; x < 경계.Max.X; x++ {
 			흑백_색상값 = 흑백_이미지.Gray16At(x, y).Y
 			차이 := float64(흑백_색상값) - 평균값
 			차이_제곱 := 차이 * 차이

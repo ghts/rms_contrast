@@ -1,0 +1,5 @@
+module github.com/ghts/rms_contrast
+
+go 1.24.0
+
+require golang.org/x/image v0.40.0
